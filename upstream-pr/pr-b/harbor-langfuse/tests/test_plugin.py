@@ -191,7 +191,9 @@ def test_dataset_sync_creates_and_upserts_items(tmp_path, monkeypatch):
     monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk")
     plugin = LangfusePlugin(dataset_name="ds", export_traces=False)
     job = FakeJob(tmp_path)
-    (tmp_path / "tasks" / "hello-world" / "instruction.md").write_text("Do it.")
+    instruction = tmp_path / "tasks" / "hello-world" / "instruction.md"
+    instruction.parent.mkdir(parents=True, exist_ok=True)
+    instruction.write_text("Do it.")
     asyncio.run(plugin.on_job_start(job))
 
     assert plugin._dataset_id == "ds-1"
