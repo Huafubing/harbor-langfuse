@@ -1,0 +1,10 @@
+{
+  "trial_name": "hello-sql__terminus-2__openai_gpt-4o-mini__1",
+  "task_name": "hello-sql",
+  "agent_name": "terminus-2",
+  "model_name": "openai/gpt-4o-mini",
+  "run_id": "demo-run-20260901",
+  "result": {
+    "reward": 1.0
+  }
+}

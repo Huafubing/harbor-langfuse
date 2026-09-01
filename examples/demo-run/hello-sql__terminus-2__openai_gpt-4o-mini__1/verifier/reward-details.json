@@ -1,0 +1,7 @@
+{
+  "criteria": [
+    {"name": "schema", "score": 1.0, "reasoning": "表结构完全一致"},
+    {"name": "coverage", "score": 0.9, "reasoning": "缺少一个非关键列"},
+    {"name": "pricing", "score": 0.8, "reasoning": "两条价格取整方式不同"}
+  ]
+}

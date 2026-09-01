@@ -1,0 +1,62 @@
+{
+  "schema_version": "ATIF-v1.8",
+  "session_id": "demo-session-0001",
+  "agent": {
+    "name": "terminus-2",
+    "version": "1.0.0",
+    "model_name": "openai/gpt-4o-mini"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "timestamp": "2026-09-01T08:00:00Z",
+      "source": "user",
+      "message": "在 /workspace 创建 hello.txt，内容为一行：Hello Harbor"
+    },
+    {
+      "step_id": 2,
+      "timestamp": "2026-09-01T08:00:02Z",
+      "source": "agent",
+      "model_name": "openai/gpt-4o-mini",
+      "message": "我将调用文件写入工具创建该文件。",
+      "reasoning_content": "任务明确，直接调用 file_write 即可。",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_1",
+          "function_name": "file_write",
+          "arguments": {"path": "hello.txt", "content": "Hello Harbor"}
+        }
+      ],
+      "observation": {
+        "results": [
+          {"source_call_id": "call_1", "content": "File created successfully"}
+        ]
+      },
+      "metrics": {
+        "prompt_tokens": 520,
+        "completion_tokens": 80,
+        "cached_tokens": 200,
+        "cost_usd": 0.00045
+      }
+    },
+    {
+      "step_id": 3,
+      "timestamp": "2026-09-01T08:00:05Z",
+      "source": "agent",
+      "model_name": "openai/gpt-4o-mini",
+      "message": "文件已创建，内容校验通过，任务完成。",
+      "metrics": {
+        "prompt_tokens": 600,
+        "completion_tokens": 44,
+        "cost_usd": 0.00033
+      }
+    }
+  ],
+  "final_metrics": {
+    "total_prompt_tokens": 1120,
+    "total_completion_tokens": 124,
+    "total_cached_tokens": 200,
+    "total_cost_usd": 0.00078,
+    "total_steps": 3
+  }
+}
