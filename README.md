@@ -150,3 +150,9 @@ harbor-langfuse/
 ├── tests/                    # 离线自测（span 树结构 / provider 构造）
 └── examples/demo-run/        # 最小 Trial 样例，开箱即测
 ```
+
+## Roadmap
+
+- [x] v0.1.0 独立导出器（本仓 `src/atif2langfuse/`，已端到端验证）
+- [ ] RFC 0001 上游化：`LangfuseUploader` + `LangfusePlugin` 提回 harbor-framework → [docs/rfcs/0001-langfuse-integration.md](docs/rfcs/0001-langfuse-integration.md)（上游接口形态分析见 [docs/upstream-interface-analysis.md](docs/upstream-interface-analysis.md)）
+- [ ] 时延真值事件源（环境注入 / 模型反代，后续 RFC，参考上游 `environments/langsmith.py` 模式）
