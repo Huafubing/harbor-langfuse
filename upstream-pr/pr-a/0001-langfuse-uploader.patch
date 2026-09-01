@@ -1,0 +1,72 @@
+--- a/src/harbor_atif2otel/plugin.py
++++ b/src/harbor_atif2otel/plugin.py
+@@ -31,6 +31,11 @@
+     ):
+         super().__init__()
+         self._endpoint = endpoint or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
++        self._langfuse_public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
++        if self._endpoint is None and self._langfuse_public_key:
++            langfuse_host = os.getenv("LANGFUSE_HOST")
++            if langfuse_host:
++                self._endpoint = langfuse_host
+         self._output_dir = output_dir or os.getenv("HARBOR_OTEL_OUTPUT_DIR")
+         self._experiment_name = experiment_name or os.getenv("MLFLOW_EXPERIMENT_NAME")
+         self._token = token or os.getenv("MLFLOW_TRACKING_TOKEN") or ""
+@@ -116,6 +121,15 @@
+             )
+ 
+     def _make_uploader(self) -> Uploader:
++        if self._langfuse_public_key:
++            from harbor_atif2otel.uploaders.langfuse import LangfuseUploader
++
++            return LangfuseUploader(
++                host=self._endpoint or "",
++                public_key=self._langfuse_public_key,
++                secret_key=os.getenv("LANGFUSE_SECRET_KEY", ""),
++            )
++
+         from harbor_atif2otel.uploaders.mlflow_protobuf import MlflowProtobufUploader
+ 
+         return MlflowProtobufUploader(
+--- a/README.md
++++ b/README.md
+@@ -32,6 +32,39 @@
+ uploader.upload(resource_spans)
+ ```
+ 
++## Uploaders
++
++The OTel plugin supports pluggable upload backends:
++
++| Uploader | Backend | Selected when |
++|---|---|---|
++| `MlflowProtobufUploader` | MLflow | `MLFLOW_EXPERIMENT_NAME` / `MLFLOW_TRACKING_TOKEN` set (default) |
++| `LangfuseUploader` | Langfuse (self-hosted or cloud) | `LANGFUSE_PUBLIC_KEY` set |
++
++### Langfuse
++
++```bash
++export LANGFUSE_HOST="https://langfuse.example.com"
++export LANGFUSE_PUBLIC_KEY="pk-lf-..."
++export LANGFUSE_SECRET_KEY="sk-lf-..."
++harbor run ... --plugin atif2otel
++```
++
++Spans are exported to `{LANGFUSE_HOST}/api/public/otel/v1/traces` (OTLP/HTTP, protobuf) with HTTP Basic auth and the `x-langfuse-ingestion-version: 4` header, which enables real-time ingestion on Langfuse v4 (without it, directly-ingested OTel data can be delayed by up to 10 minutes). Transient server errors (408/429/5xx) are retried with exponential backoff. `LANGFUSE_HOST` also satisfies the plugin's endpoint requirement in `auto` mode, so no `OTEL_EXPORTER_OTLP_ENDPOINT` is needed.
++
++Direct use:
++
++```python
++from harbor_atif2otel.uploaders.langfuse import LangfuseUploader
++
++uploader = LangfuseUploader(
++    host="https://langfuse.example.com",
++    public_key="pk-lf-...",
++    secret_key="sk-lf-...",
++)
++uploader.upload(resource_spans)
++```
++
+ ## API
+ 
+ ### `convert_trajectory(trajectory, trace_seed=None, service_name="harbor", max_attribute_bytes=10240)`
