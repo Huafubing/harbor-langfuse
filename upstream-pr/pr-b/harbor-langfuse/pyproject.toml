@@ -1,0 +1,39 @@
+[project]
+name = "harbor-langfuse"
+version = "0.1.0"
+description = "Langfuse plugin for Harbor jobs: dataset sync, experiment mapping, and verifier score backfill."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Libotry" }]
+requires-python = ">=3.12"
+dependencies = [
+    "harbor>=0.13.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+otel = [
+    "harbor-atif2otel>=0.1.1",
+]
+test = [
+    "pytest>=8.4.1",
+    "opentelemetry-proto>=1.42.1",
+]
+
+[project.entry-points."harbor.plugins"]
+langfuse = "harbor_langfuse:LangfusePlugin"
+
+[project.urls]
+Repository = "https://github.com/harbor-framework/harbor"
+Issues = "https://github.com/harbor-framework/harbor/issues"
+
+[tool.uv.sources]
+harbor = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.10.8,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "harbor_langfuse"
