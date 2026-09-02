@@ -61,6 +61,47 @@ runs/                                ← --run-root 指向这里
 
 如果 Python 环境里装了 Harbor 源码包，读取层会自动 `import harbor.utils.traces_utils` 复用其发现与元数据逻辑；没装则用内置兼容实现（`reader.py`），两者行为一致。
 
+## 完整跑通（从零到 Langfuse 看到数据）
+
+以上三步做完后，按序执行下面的命令即可端到端跑通。以仓库自带 demo 数据为例（替换成你的 runs 目录同理）：
+
+```bash
+# 0) 进入仓库并激活环境（每次新开终端）
+cd /root/harbor-langfuse
+source .venv/bin/activate
+set -a; source .env; set +a          # LANGFUSE_HOST / PK / SK 已填好
+export RUN_ROOT=examples/demo-run
+
+# 1) 干跑验证解析与脱敏（不联网，看 span 数量与内容模式）
+atif2langfuse export --run-root $RUN_ROOT --dry-run
+
+# 2) 正式导出：轨迹 + 判分 → Langfuse
+atif2langfuse export --run-root $RUN_ROOT
+#    输出形如 [exported] ... trace_id=0852f6...，随后逐条回填 reward scores
+
+# 3) 打开 http://localhost:3000 → Traces → tags 过滤 harbor：
+#    - 打开那条 trace：root(trial) + llm / tool.* span 树
+#    - Scores 区块：reward=1.0、reward.schema/coverage/pricing
+#    - Session 视图：同 session_id 的 trial 聚合
+```
+
+跑真实 Harbor 评测时的完整链路（含五个指标真值）：
+
+```bash
+# A) agent 的模型请求改走 LiteLLM proxy（方案 A，详见 deploy/scheme-a/README.md）
+#    - 起 Langfuse + LiteLLM：cd <langfuse目录> && docker compose -f docker-compose.yml \
+#        -f docker-compose.litellm.yml up -d
+#    - agent 侧：export OPENAI_BASE_URL=http://<proxy>:4000/v1 OPENAI_API_KEY=$LITELLM_MASTER_KEY
+#    - harbor run -t <task> -a mini-swe-agent -m openai/ascend-qwen
+
+# B) 评测结束后四条命令（在 deploy/scheme-a/ 下，source .env 后）
+cd deploy/scheme-a
+atif2langfuse export --run-root $RUN_ROOT        # ① 轨迹+reward → Trial Trace
+python3 tools/analyzer.py --run-root $RUN_ROOT   # ② 轨迹质量 + ⑤ per-tool 时延
+python3 tools/join_proxy_traces.py --run-root $RUN_ROOT   # ③④ proxy trace join + 三段拆解
+python3 tools/verify_langfuse.py --run-root $RUN_ROOT     # 五指标验收清单（PASS/FAIL）
+```
+
 ## 快速开始
 
 ```bash
@@ -148,11 +189,16 @@ harbor-langfuse/
 │   ├── spans.py              # 计划层（可 dry-run）+ OTel 执行层
 │   └── scores.py             # Scores API 回填
 ├── tests/                    # 离线自测（span 树结构 / provider 构造）
+├── deploy/scheme-a/          # 方案 A：LiteLLM 反代部署 + 五指标验证工具（见其 README）
+│   ├── docker-compose.litellm.yml / litellm_config.yaml / .env.example
+│   └── tools/                # analyzer / join_proxy_traces / verify_langfuse
+├── upstream-pr/              # RFC 0001 两个 PR 的完整实现（pr-a / pr-b）
+├── docs/                     # RFC 提案与上游接口分析
 └── examples/demo-run/        # 最小 Trial 样例，开箱即测
 ```
 
 ## Roadmap
 
 - [x] v0.1.0 独立导出器（本仓 `src/atif2langfuse/`，已端到端验证）
+- [x] 方案 A 时延事件源：LiteLLM proxy → TTFT/TPOT 真值（`deploy/scheme-a/`，含五指标验收工具）
 - [ ] RFC 0001 上游化：`LangfuseUploader` + `LangfusePlugin` 提回 harbor-framework → [docs/rfcs/0001-langfuse-integration.md](docs/rfcs/0001-langfuse-integration.md)（上游接口形态分析见 [docs/upstream-interface-analysis.md](docs/upstream-interface-analysis.md)）
-- [ ] 时延真值事件源（环境注入 / 模型反代，后续 RFC，参考上游 `environments/langsmith.py` 模式）
