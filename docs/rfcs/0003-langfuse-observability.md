@@ -1,10 +1,10 @@
-# RFC 0002: Langfuse Observability for Harbor Jobs — Plugin Integration and Model-Path Telemetry
+# RFC 0003: Langfuse Observability for Harbor Jobs — Plugin Integration and Model-Path Telemetry for Black-Box Agents
 
 - **Status**: Draft (not yet submitted upstream)
 - **Author**: Libotry
 - **Target repository**: `harbor-framework/harbor`
 - **Related**: RFC 0001 (ATIF), `packages/harbor-atif2otel`, `packages/harbor-langsmith`
-- **Supersedes**: the Langfuse-uploader portion of the author's earlier draft proposal
+- **Verified against**: `harbor-framework/harbor` `main` @ `6af8d6e`
 
 ---
 
@@ -22,7 +22,7 @@ Parts 1–3 are orthogonal: the plugin works without a proxy, the proxy works wi
 
 ### 2.1 Self-hosted, OTel-native observability
 
-Langfuse is MIT-licensed and the most widely deployed open-source LLM observability backend. Regulated evaluation environments (government, finance, on-prem labs) frequently require prompts, completions, and scores to remain inside the evaluation network. Harbor already ships a first-party LangSmith plugin and an ATIF→OTel converter with a pluggable uploader; Langfuse is the notable open-source backend with no Harbor equivalent.
+Langfuse is MIT-licensed and among the most widely deployed open-source LLM observability backends. Regulated evaluation environments (government, finance, on-prem labs) frequently require prompts, completions, and scores to remain inside the evaluation network. Harbor already ships a first-party LangSmith plugin and an ATIF→OTel converter with a pluggable uploader; Langfuse is the notable open-source backend with no Harbor equivalent.
 
 The conversion layer already exists: `harbor-atif2otel` emits OpenInference-attributed OTel spans (`openinference.span.kind`, `llm.token_count.*`, `tool.name`, `input.value`/`output.value`), and Langfuse ingests OpenTelemetry natively. What is missing is an uploader (authentication/headers differ) and a management-plane plugin.
 
@@ -45,7 +45,8 @@ All extension points below already exist on `main`:
 |---|---|---|
 | Plugin registration | `[project.entry-points."harbor.plugins"]` | name → `module:Class`; `harbor run --plugin <name>`; `harbor plugins list` |
 | Plugin base | `harbor/models/job/plugin.py` | `async on_job_start(job)`, `async on_job_end(job_result)` |
-| Trial hooks | `harbor/trial/hooks.py`; `Job.on_trial_started/ended/cancelled(cb)` | `TrialHookEvent(event, task_name, config, result, ...)` |
+| Trial hook event | `harbor/trial/hooks.py` | `TrialHookEvent(event, task_name, config, result, ...)` |
+| Trial hook registration | `Job.on_trial_started/ended/cancelled(cb)` in `harbor/job.py` | register async callbacks per job |
 | ATIF → OTel | `harbor-atif2otel.convert_trajectory()` | ATIF dict → `ResourceSpans` (OpenInference attributes) |
 | Uploader ABC | `harbor-atif2otel/uploaders/base.py` | `upload(ResourceSpans)`; only `MlflowProtobufUploader` exists today |
 | Verifier rewards | `TrialResult.verifier_result.rewards` | reward name → value mapping; the LangSmith plugin already posts these as feedback |
@@ -65,10 +66,10 @@ class LangfuseUploader(Uploader):
 
 Behavior:
 
-- **Endpoint**: `POST {host}/api/public/otel/v1/traces`, OTLP over HTTP, protobuf body (same wire format as the MLflow uploader; stdlib `urllib` only — no new dependencies).
-- **Headers**: HTTP Basic auth (`public_key:secret_key`) plus `x-langfuse-ingestion-version: 4`, which enables real-time ingestion on Langfuse v4; without it, directly-ingested OTel data can be delayed by up to 10 minutes.
+- **Endpoint**: `POST {host}/api/public/otel/v1/traces`, OTLP over HTTP, protobuf body (same wire format as the MLflow uploader; stdlib `urllib` for transport, no dependencies beyond `harbor-atif2otel`'s existing `opentelemetry-proto`).
+- **Headers**: HTTP Basic auth (`public_key:secret_key`) plus `x-langfuse-ingestion-version: 4`, which enables real-time ingestion on Langfuse v4; without it, directly ingested OTel data can be delayed by up to 10 minutes.
 - **Retry**: 408/429/5xx with exponential backoff (bounded); auth errors fail fast.
-- **Selection**: `OtelPlugin._make_uploader()` auto-selects the Langfuse uploader when `LANGFUSE_PUBLIC_KEY` is set; MLflow behavior is unchanged otherwise. `LANGFUSE_HOST` may stand in for `OTEL_EXPORTER_OTLP_ENDPOINT` in `auto` mode.
+- **Selection (proposed change)**: `OtelPlugin._make_uploader()` today unconditionally returns `MlflowProtobufUploader`; this RFC extends it to auto-select the Langfuse uploader when `LANGFUSE_PUBLIC_KEY` is set, leaving MLflow behavior unchanged otherwise. `LANGFUSE_HOST` may stand in for `OTEL_EXPORTER_OTLP_ENDPOINT` in `auto` mode.
 
 ~150 LOC including tests.
 
@@ -112,7 +113,7 @@ This mirrors Langfuse's documented three-level experiment context (experiment �
 
 Mirroring the LangSmith feedback precedent:
 
-- `TrialResult.verifier_result.rewards` → one score per reward key (`NUMERIC` for numeric values, `CATEGORICAL` for strings) attached to the trial's trace.
+- `TrialResult.verifier_result.rewards` → one `NUMERIC` score per reward key attached to the trial's trace (rewards are `dict[str, float | int]` upstream today; other score data types remain available if reward types grow).
 - Trials that ended with an exception → a boolean `harbor_error` score, so error rates aggregate in dashboards.
 - Scores are upserted by deterministic ids (UUIDv5), making re-exports idempotent.
 - **User-defined derived scores**: offline trajectory analysis (computed by the user's own tooling, outside this plugin) may post additional scores through the same public Scores API. The specific metrics are deployment-specific and intentionally out of scope here; the plugin's contract is only that verifier rewards and error state are exported.
@@ -157,13 +158,13 @@ litellm_settings:
   callbacks: ["otel"]
 ```
 
-with `OTEL_EXPORTER_OTLP_ENDPOINT` pointed at Langfuse's OTel endpoint (Basic auth + ingestion-version header, same as Part 1). Routing agents through the proxy is a pure environment-variable change (`OPENAI_BASE_URL`, `OPENAI_API_KEY` — or `ANTHROPIC_BASE_URL` for Anthropic-format agents), well within Harbor's existing env-injection surface.
+with `OTEL_EXPORTER_OTLP_ENDPOINT` pointed at Langfuse's OTel endpoint (Basic auth + ingestion-version header, same as Part 1). Routing agents through the proxy is a pure environment-variable change (`OPENAI_BASE_URL`, `OPENAI_API_KEY` — or `ANTHROPIC_BASE_URL` for Anthropic-format agents); it requires no Harbor or agent code changes, however the deployment configures its agent environment.
 
 ### 6.2 Trial correlation
 
 Two mechanisms, by agent capability:
 
-1. **Header-based (exact)**: agents built on an SDK may send `x-litellm-session-id` (or arbitrary metadata via `x-litellm-metadata`), which LiteLLM resolves with a fixed priority and forwards onto the OTel span. Proxy traces then land directly in the right Langfuse session — no post-processing.
+1. **Header-based (exact)**: agents built on an SDK may send a session header, which LiteLLM resolves with a fixed priority — `x-litellm-trace-id` first, then `x-litellm-session-id`, then any `x-<vendor>-session-id` header (e.g. `x-claude-code-session-id` is auto-detected). The last pattern means agents that already emit their own session header get correlation for free. Proxy traces then land directly in the right Langfuse session — no post-processing. (Implementation note: session-id propagation onto the OTel span attributes should be verified against the current LiteLLM release before PR-C lands.)
 2. **Time-window join (near-exact)**: for black-box CLI agents, a small join utility queries Langfuse for traces whose timestamps fall inside a trial's `[started_at, finished_at]` window (both available in `TrialResult`) and patches their session id. Under single-concurrency evaluation this is exact; under concurrency it is a bounded time-bucket approximation.
 
 We propose this join as an optional utility — either a standalone script in the plugin package or a documented recipe — and are open to maintainer guidance on where it best lives.
@@ -172,7 +173,7 @@ We propose this join as an optional utility — either a standalone script in th
 
 Per-request TTFT/TPOT/token/cost become visible for any proxied agent, correlated with the trial's trajectory trace under one session. Caveats that belong in any report using this path:
 
-- **Observer effect**: the proxy adds measurable overhead (tens of milliseconds per request in public benchmarks). TTFT measured this way should be labeled "via proxy"; for calibration, an instrumented agent and a proxy can be run simultaneously and compared.
+- **Observer effect**: the proxy adds measurable overhead (tens of milliseconds per request in public benchmarks). TTFT measured this way should be labeled "via proxy"; where the inference backend exposes its own request telemetry, comparing the two calibrates the proxy overhead.
 - **TTFT requires streaming**: non-streaming requests report no first-token time.
 - **TPOT is an average** (generation time / completion tokens), not a per-token distribution.
 
@@ -209,24 +210,9 @@ All parts are default-inert: no behavior change unless Langfuse credentials are 
 ## 11. References
 
 - Langfuse OpenTelemetry ingestion: <https://langfuse.com/integrations/native/opentelemetry>
+- Langfuse v4 ingestion migration (`x-langfuse-ingestion-version`): <https://langfuse.com/integrations/native/opentelemetry/migration-to-v4>
 - Experiments via OpenTelemetry: <https://langfuse.com/integrations/native/opentelemetry/experiments>
 - Langfuse Public API: <https://langfuse.com/docs/api-and-data-platform/features/public-api>
 - LiteLLM OpenTelemetry metrics (TTFT/TPOT): <https://docs.litellm.ai/docs/observability/opentelemetry_integration>
 - LiteLLM proxy request headers (session id resolution): <https://docs.litellm.ai/docs/proxy/request_headers>
 - ATIF RFC: `rfcs/0001-trajectory-format.md`
-
----
-
-## 附录：中文审阅摘要（非上游提交内容）
-
-**定位**：本 RFC 合并此前讨论的两条线——① Langfuse 插件化（原 PR-A 上传器 + PR-B 管理面插件）；② LiteLLM Proxy 模型链路遥测（TTFT/TPOT/token/cost 真值，零 agent 改动）。方案 B（agent 内打点）仅在 Non-goals 提了一句"ATIF `step.extra` 可承载，留待未来 RFC"，未展开。
-
-**已模糊化内容**（自研未公开，全部泛化处理）：
-- 具体轨迹质量指标（冗余率/死循环/错误分类等）→ 只写"用户自定义离线派生指标，走同一 Scores API，具体定义 out of scope"
-- 三段拆解的特定 score 命名 → 未出现，只在 proxy 部分写了"时间归因于模型/非模型段"的通用描述
-- E1–E7 / 现象标签 / 双轨六维等内部体系 → 完全未出现
-- demo/原型仓链接 → 未出现（RFC 0001 里有，这版删了，避免暴露内部指标讨论）
-
-**与 RFC 0001 的关系**：本篇取代 0001 的 Langfuse 部分；0001 保留作为接口分析底稿，不重复提交。
-
-**待你拍板**：① PR-C 的 join 工具放插件包内还是独立脚本（RFC 里写了两可，倾向问 maintainer）；② 代理观察者效应的表述力度（当前写法把 +40ms 泛化为"tens of milliseconds"，未引具体基准）；③ 标题是否要点出"black-box agents"卖点。

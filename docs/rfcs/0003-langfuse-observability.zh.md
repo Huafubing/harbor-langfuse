@@ -1,8 +1,8 @@
-# RFC 0002：Harbor 作业的 Langfuse 可观测性 — 插件集成与模型链路遥测
+# RFC 0003：Harbor 作业的 Langfuse 可观测性 — 插件集成与面向黑盒 Agent 的模型链路遥测
 
-> 本文档是 [0002-langfuse-observability.md](0002-langfuse-observability.md) 的中文翻译版，供内部评审使用。英文版为提交上游的正式文本；若两版含义有出入，以英文版为准。
+> 本文档是 [0003-langfuse-observability.md](0003-langfuse-observability.md) 的中文翻译版，供内部评审使用。英文版为提交上游的正式文本；若两版含义有出入，以英文版为准。内部审阅备注见 [0003-langfuse-observability.internal-notes.zh.md](0003-langfuse-observability.internal-notes.zh.md)。
 >
-> 状态：草稿（尚未提交上游） · 作者：Libotry · 目标仓库：`harbor-framework/harbor` · 关联：RFC 0001（ATIF）、`packages/harbor-atif2otel`、`packages/harbor-langsmith`
+> 状态：草稿（尚未提交上游） · 作者：Libotry · 目标仓库：`harbor-framework/harbor` · 关联：RFC 0001（ATIF）、`packages/harbor-atif2otel`、`packages/harbor-langsmith` · 核对基线：`harbor-framework/harbor` main @ `6af8d6e`
 
 ---
 
@@ -20,7 +20,7 @@
 
 ### 2.1 自托管、OTel 原生的可观测性
 
-Langfuse 采用 MIT 许可，是部署最广泛的开源 LLM 可观测后端。受监管的评测环境（政务、金融、本地机房）通常要求 prompt、补全内容与判分留在评测网络之内。Harbor 已内置第一方的 LangSmith 插件和带可插拔上传器的 ATIF→OTel 转换器；Langfuse 是其中明显缺失对应的开源后端。
+Langfuse 采用 MIT 许可，是部署最广泛的开源 LLM 可观测后端之一。受监管的评测环境（政务、金融、本地机房）通常要求 prompt、补全内容与判分留在评测网络之内。Harbor 已内置第一方的 LangSmith 插件和带可插拔上传器的 ATIF→OTel 转换器；Langfuse 是其中明显缺失对应的开源后端。
 
 转换层其实已经存在：`harbor-atif2otel` 产出带 OpenInference 属性的 OTel span（`openinference.span.kind`、`llm.token_count.*`、`tool.name`、`input.value`/`output.value`），而 Langfuse 原生摄取 OpenTelemetry。缺的只是一个上传器（认证与请求头不同）和一个管理面插件。
 
@@ -43,7 +43,8 @@ Proxy 本身也是独立的测量基础设施：生产化 Serving 行为（流�
 |---|---|---|
 | 插件注册 | `[project.entry-points."harbor.plugins"]` | 名称 → `module:Class`；`harbor run --plugin <name>`；`harbor plugins list` |
 | 插件基类 | `harbor/models/job/plugin.py` | `async on_job_start(job)`、`async on_job_end(job_result)` |
-| Trial 钩子 | `harbor/trial/hooks.py`；`Job.on_trial_started/ended/cancelled(cb)` | `TrialHookEvent(event, task_name, config, result, ...)` |
+| Trial 钩子事件 | `harbor/trial/hooks.py` | `TrialHookEvent(event, task_name, config, result, ...)` |
+| Trial 钩子注册 | `harbor/job.py` 中的 `Job.on_trial_started/ended/cancelled(cb)` | 按 job 注册异步回调 |
 | ATIF → OTel | `harbor-atif2otel.convert_trajectory()` | ATIF dict → `ResourceSpans`（OpenInference 属性） |
 | Uploader 抽象 | `harbor-atif2otel/uploaders/base.py` | `upload(ResourceSpans)`；目前仅有 `MlflowProtobufUploader` |
 | Verifier 判分 | `TrialResult.verifier_result.rewards` | 判分名 → 值的映射；LangSmith 插件已将其作为 feedback 上报 |
@@ -63,10 +64,10 @@ class LangfuseUploader(Uploader):
 
 行为：
 
-- **端点**：`POST {host}/api/public/otel/v1/traces`，OTLP over HTTP，protobuf 请求体（与 MLflow 上传器同一线上格式；仅用标准库 `urllib`——不新增依赖）。
+- **端点**：`POST {host}/api/public/otel/v1/traces`，OTLP over HTTP，protobuf 请求体（与 MLflow 上传器同一线上格式；传输层仅用标准库 `urllib`，除 `harbor-atif2otel` 既有的 `opentelemetry-proto` 外不新增依赖）。
 - **请求头**：HTTP Basic 认证（`public_key:secret_key`）外加 `x-langfuse-ingestion-version: 4`，后者开启 Langfuse v4 的实时摄取；缺省该头时，直连摄取的 OTel 数据可能延迟最多 10 分钟。
 - **重试**：408/429/5xx 指数退避（有上限）；认证类错误立即失败。
-- **选择逻辑**：设置 `LANGFUSE_PUBLIC_KEY` 时 `OtelPlugin._make_uploader()` 自动选用 Langfuse 上传器；否则 MLflow 行为不变。`auto` 模式下 `LANGFUSE_HOST` 可替代 `OTEL_EXPORTER_OTLP_ENDPOINT`。
+- **选择逻辑（本 RFC 提议的改动）**：`OtelPlugin._make_uploader()` 目前无条件返回 `MlflowProtobufUploader`；本 RFC 将其扩展为：设置 `LANGFUSE_PUBLIC_KEY` 时自动选用 Langfuse 上传器，否则 MLflow 行为不变。`auto` 模式下 `LANGFUSE_HOST` 可替代 `OTEL_EXPORTER_OTLP_ENDPOINT`。
 
 含测试约 150 行。
 
@@ -110,7 +111,7 @@ Langfuse 按 `langfuse.*` 命名空间的属性做过滤与聚合，而转换器
 
 对齐 LangSmith 的 feedback 先例：
 
-- `TrialResult.verifier_result.rewards` → 每个判分键一条 score（数值型为 `NUMERIC`，字符串为 `CATEGORICAL`），挂在该 trial 的 trace 上。
+- `TrialResult.verifier_result.rewards` → 每个判分键一条 `NUMERIC` score，挂在该 trial 的 trace 上（上游当前 rewards 类型为 `dict[str, float | int]`；若未来判分类型扩展，其余 score 数据类型仍可启用）。
 - 以异常收尾的 trial → 布尔型 `harbor_error` score，使错误率可在看板聚合。
 - Scores 按确定性 id（UUIDv5）upsert，重导幂等。
 - **用户自定义派生指标**：离线轨迹分析（由用户自己的工具计算，在本插件之外）可通过同一公开 Scores API 回填更多 scores。具体指标因部署而异，本文刻意不纳入范围；插件的契约仅是导出 verifier 判分与错误状态。
@@ -155,13 +156,13 @@ litellm_settings:
   callbacks: ["otel"]
 ```
 
-`OTEL_EXPORTER_OTLP_ENDPOINT` 指向 Langfuse 的 OTel 端点（Basic 认证 + ingestion-version 头，与第一部分相同）。将 agent 路由到 proxy 是纯粹的环境变量改动（`OPENAI_BASE_URL`、`OPENAI_API_KEY`——Anthropic 格式 agent 用 `ANTHROPIC_BASE_URL`），完全落在 Harbor 既有 env 注入面之内。
+`OTEL_EXPORTER_OTLP_ENDPOINT` 指向 Langfuse 的 OTel 端点（Basic 认证 + ingestion-version 头，与第一部分相同）。将 agent 路由到 proxy 是纯粹的环境变量改动（`OPENAI_BASE_URL`、`OPENAI_API_KEY`——Anthropic 格式 agent 用 `ANTHROPIC_BASE_URL`）；无论部署侧如何配置 agent 环境，都不需要改动 Harbor 或 agent 代码。
 
 ### 6.2 Trial 关联
 
 按 agent 能力分两级：
 
-1. **基于请求头（精确）**：基于 SDK 构建的 agent 可发送 `x-litellm-session-id`（或经 `x-litellm-metadata` 携带任意元数据），LiteLLM 按固定优先级解析并转发到 OTel span。Proxy trace 因此直接落入正确的 Langfuse session——无需后处理。
+1. **基于请求头（精确）**：基于 SDK 构建的 agent 可发送 session 请求头，LiteLLM 按固定优先级解析——先 `x-litellm-trace-id`，其次 `x-litellm-session-id`，再次任意 `x-<vendor>-session-id` 头（如 `x-claude-code-session-id` 会被自动识别）。最后这一模式意味着：已自带 session 头的 agent 可以免费获得关联。Proxy trace 因此直接落入正确的 Langfuse session——无需后处理。（实现备注：session id 是否传播到 OTel span 属性，需在 PR-C 落地前对当前 LiteLLM 版本实测确认。）
 2. **时间窗 join（近精确）**：对黑盒 CLI agent，一个小型 join 工具查询 Langfuse 中时间戳落在某 trial `[started_at, finished_at]` 窗口（两者都来自 `TrialResult`）内的 trace，并 PATCH 其 session id。单并发评测下这是精确的；并发下是有界的时间分桶近似。
 
 我们建议将此 join 做成可选工具——插件包内的独立脚本或文档化 recipe 皆可——具体落点欢迎 maintainer 给意见。
@@ -170,7 +171,7 @@ litellm_settings:
 
 对任何走 proxy 的 agent，逐请求 TTFT/TPOT/token/cost 变为可见，并在同一 session 下与该 trial 的轨迹 trace 关联。使用该路径的报告必须写明以下口径：
 
-- **观察者效应**：proxy 会引入可测量的开销（公开基准中为每请求数十毫秒量级）。如此测得的 TTFT 应标注"经 proxy 口径"；做校准时，可将带埋点的 agent 与 proxy 同时运行并对比。
+- **观察者效应**：proxy 会引入可测量的开销（公开基准中为每请求数十毫秒量级）。如此测得的 TTFT 应标注"经 proxy 口径"；若推理后端自身暴露请求级遥测，可用两者对比来校准 proxy 开销。
 - **TTFT 依赖流式**：非流式请求没有首 token 时刻。
 - **TPOT 是均值**（生成时长 / 补全 token 数），不是逐 token 分布。
 
@@ -207,15 +208,9 @@ litellm_settings:
 ## 11. 参考
 
 - Langfuse OpenTelemetry 摄取：<https://langfuse.com/integrations/native/opentelemetry>
+- Langfuse v4 摄取迁移（`x-langfuse-ingestion-version`）：<https://langfuse.com/integrations/native/opentelemetry/migration-to-v4>
 - 经 OpenTelemetry 的实验：<https://langfuse.com/integrations/native/opentelemetry/experiments>
 - Langfuse Public API：<https://langfuse.com/docs/api-and-data-platform/features/public-api>
 - LiteLLM OpenTelemetry 指标（TTFT/TPOT）：<https://docs.litellm.ai/docs/observability/opentelemetry_integration>
 - LiteLLM proxy 请求头（session id 解析）：<https://docs.litellm.ai/docs/proxy/request_headers>
 - ATIF RFC：`rfcs/0001-trajectory-format.md`
-
----
-
-## 附录：中文版审阅备注（本节不属于 RFC 正文）
-
-- 本译版与英文版的差异处理：英文版为上游正式文本；`x-litellm-session-id` 等技术名词、API 路径、属性名保留原文以保证可操作性。
-- 待拍板事项（同英文版文末摘要）：① PR-C join 工具的归属（插件包内 vs 独立脚本）；② 观察者效应表述力度；③ 标题是否点出 "black-box agents" 卖点。
