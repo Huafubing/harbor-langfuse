@@ -1,0 +1,25 @@
+# 与 Langfuse 官方 compose 叠加运行（在 langfuse 仓库目录下）：
+#   cp <本目录>/docker-compose.litellm.yml <langfuse仓库>/
+#   cp <本目录>/litellm_config.yaml   <langfuse仓库>/
+#   docker compose -f docker-compose.yml -f docker-compose.litellm.yml up -d
+services:
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    container_name: eval-litellm
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      VLLM_ASCEND_BASE_URL: ${VLLM_ASCEND_BASE_URL:?set in .env}
+      VLLM_ASCEND_API_KEY: ${VLLM_ASCEND_API_KEY:-dummy}
+      # OTel callback → Langfuse（与 langfuse-web 同 compose 网络）
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${LANGFUSE_INTERNAL_URL:-http://langfuse-web:3000}/api/public/otel
+      OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${LANGFUSE_AUTH_B64:?base64(pk:sk)},x-langfuse-ingestion-version=4"
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+    extra_hosts:
+      # vllm-ascend 跑在宿主机/内网其他机器时，容器内可达
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

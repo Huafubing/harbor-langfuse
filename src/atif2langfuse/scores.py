@@ -38,7 +38,7 @@ def _score_items(trial) -> List[Dict[str, object]]:
 def backfill_scores(host: str, public_key: str, secret_key: str,
                     ids: Dict[str, str], trial, timeout: int = 15
                     ) -> List[Tuple[str, object, str]]:
-    url = host.rstrip("/") + "/api/public/score"
+    url = host.rstrip("/") + "/api/public/scores"
     auth = (public_key, secret_key)
     results: List[Tuple[str, object, str]] = []
     for item in _score_items(trial):
