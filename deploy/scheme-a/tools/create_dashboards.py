@@ -14,7 +14,7 @@
   3. Harbor · 时延性能
      ① 总体卡片：任务时长 / 模型段 / 非模型段 / LLM 请求时延（均值）
      ② 时间构成：模型段 vs 非模型段 饼图（sum 占比）+ Trial×阶段 透视表
-     ③ LLM 请求：时延 avg/p95/TTFT + 各 Trial 生成吞吐 + Token（in/out/合计）
+     ③ LLM 请求：时延 avg/p95/TTFT/TPOT + 各 Trial 生成吞吐 + Token（in/out/合计）
      ④ 请求量：各 Trial LLM 请求数；工具：per-tool 时延
 
 图表选型原则：饼图只用于"构成占比"（通过/未通过、模型/非模型段）；
@@ -32,7 +32,8 @@
   - scores 全部由 analyzer / join_proxy_traces 产出（proxy GENERATION 聚合，
     单位秒）；不用 observations 视图 —— trial trace 内 ATIF 导出的 GENERATION
     与 proxy trace 的 GENERATION 重复且单位不一，混查会双算。
-  - TTFT 为 proxy 口径受限值（≈latency），已在该 widget 描述标注。
+  - TTFT/TPOT 为流式真值（原生 timeToFirstToken，经 proxy 口径）；
+    非流式请求 TTFT 缺失，TPOT 退化为时长/token 均值。
 
 用法：cd scheme-a && set -a && source .env && set +a
       python3 tools/create_dashboards.py [--force]
@@ -50,7 +51,8 @@ from lf_client import LangfuseClient  # noqa: E402
 QUALITY_NAMES = ["tool_calls_total", "tool_errors_total", "steps_total",
                  "tool_error_rate", "redundant_call_ratio"]
 PHASE_NAMES = ["task_duration_s", "model_time_s", "non_model_time_s"]
-LLM_LAT_NAMES = ["llm_latency_avg_s", "llm_latency_p95_s", "llm_ttft_avg_s"]
+LLM_LAT_NAMES = ["llm_latency_avg_s", "llm_latency_p95_s", "llm_ttft_avg_s",
+                 "llm_tpot_avg_s"]
 LLM_TOK_NAMES = ["llm_tokens_input", "llm_tokens_output", "llm_tokens_total"]
 
 # ---------- 网格常量（12 列）----------
@@ -210,10 +212,11 @@ d3_widgets += [
                dims=[{"field": "traceId"}, {"field": "name"}],
                description="行=Trial，列=task/model/non_model"),
          y=CARD_H, width=6, x=6),
-    wide(chart(score_view, "LLM 时延 avg/p95 与 TTFT", "HORIZONTAL_BAR",
+    wide(chart(score_view, "LLM 时延 avg/p95、TTFT 与 TPOT", "HORIZONTAL_BAR",
                [AVG], [f_any("name", LLM_LAT_NAMES)], dims=[{"field": "name"}],
                description="按 Trial 聚合的请求时延均值/p95；"
-                           "TTFT 为 proxy 受限口径（≈latency，仅流式上报）"),
+                           "TTFT/TPOT 为流式真值（经 proxy 口径；"
+                           "TTFT 缺失时 TPOT 退化为时长/token 均值）"),
          y=CARD_H + 3, width=6, x=0, height=3),
     wide(chart(score_view, "各 Trial 生成吞吐", "VERTICAL_BAR",
                [AVG], [f_eq("name", "llm_tput_tokens_per_s")],

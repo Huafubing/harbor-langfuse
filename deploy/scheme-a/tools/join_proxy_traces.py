@@ -130,6 +130,13 @@ def main(argv=None) -> int:
                       if isinstance(g.get("latency"), (int, float)))
         ttfts = [g["timeToFirstToken"] for g in proxy
                  if isinstance(g.get("timeToFirstToken"), (int, float))]
+        tpots = [(g["latency"] - (g["timeToFirstToken"]
+                  if isinstance(g.get("timeToFirstToken"), (int, float))
+                  else 0.0)) / max(g["outputTokens"] - 1, 1)
+                 for g in proxy
+                 if isinstance(g.get("latency"), (int, float))
+                 and isinstance(g.get("outputTokens"), (int, float))
+                 and g.get("outputTokens") >= 1]
         tin = sum(g["inputTokens"] for g in proxy
                   if isinstance(g.get("inputTokens"), (int, float)))
         tout = sum(g["outputTokens"] for g in proxy
@@ -144,6 +151,8 @@ def main(argv=None) -> int:
             "llm_latency_p95_s": round(p95, 3),
             "llm_ttft_avg_s": (round(sum(ttfts) / len(ttfts), 3)
                                if ttfts else None),
+            "llm_tpot_avg_s": (round(sum(tpots) / len(tpots), 4)
+                               if tpots else None),
             "llm_tput_tokens_per_s": (round(tout / sum(lats), 3)
                                       if lats and sum(lats) > 0 else None),
         }
@@ -169,8 +178,11 @@ def main(argv=None) -> int:
                 "traceId": trace_id, "name": name, "value": v,
                 "dataType": "NUMERIC",
                 "comment": "proxy 聚合真值（窗口内 GENERATION 统计）"
-                           + ("；注意：proxy TTFT 口径受限（≈latency）"
-                              if name == "llm_ttft_avg_s" else ""),
+                           + ("；流式请求原生 timeToFirstToken 均值（真值）"
+                              if name == "llm_ttft_avg_s" else
+                              "；(latency−TTFT)/max(output−1,1) 均值，"
+                              "TTFT 缺失时退化为 latency/max(output−1,1)"
+                              if name == "llm_tpot_avg_s" else ""),
                 "metadata": {"source": "scheme-a-join"}})
 
         # 幂等：trace 上已存在的同名 score 跳过（管线重跑不产生重复）
