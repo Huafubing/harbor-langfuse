@@ -1,0 +1,13 @@
+services:
+  clickhouse:
+    ports: !override
+      - 127.0.0.1:8123:8123
+      - 127.0.0.1:19000:9000
+  # v4 events_only 写模式下 ingestion 只收 score/log 事件；
+  # dual 桥接允许 litellm 原生 langfuse callback（SDK v2）上报 trace/generation
+  langfuse-web:
+    environment:
+      LANGFUSE_MIGRATION_V4_WRITE_MODE: ${LANGFUSE_MIGRATION_V4_WRITE_MODE:-dual}
+  langfuse-worker:
+    environment:
+      LANGFUSE_MIGRATION_V4_WRITE_MODE: ${LANGFUSE_MIGRATION_V4_WRITE_MODE:-dual}

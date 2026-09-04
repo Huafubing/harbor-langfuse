@@ -1,19 +1,14 @@
-# LiteLLM Proxy 配置：内网 vllm-ascend → Langfuse（原生 langfuse callback）
-# 关键点：
-# - success_callback: ["langfuse"] 走 Langfuse ingestion API；litellm 在流式期间
-#   统计 completion_start_time，Langfuse 据此计算原生 timeToFirstToken（TTFT 可见，
-#   TPOT 由验证脚本按 v2 observation 时间戳计算）
-# - model_name 是 agent 侧请求的别名；model 的 openai/ 前缀 + api_base 指向 vllm-ascend
+# LiteLLM Proxy 配置：SiliconFlow 云端 API → Langfuse（原生 langfuse callback）
 model_list:
-  - model_name: qwen3                           # agent 请求用的别名（可改）
+  - model_name: deepseek-v4-flash              # agent 侧请求的别名（litellm 对外暴露）
     litellm_params:
-      model: openai/qwen3                       # vllm serve 的实际模型名（按需修改）
-      api_base: os.environ/VLLM_ASCEND_BASE_URL
-      api_key: os.environ/VLLM_ASCEND_API_KEY
+      model: openai/deepseek-ai/DeepSeek-V4-Flash  # 上游 SiliconFlow 的模型 ID（openai provider 前缀 + 实际名）
+      api_base: os.environ/VLLM_ASCEND_BASE_URL     # = https://api.siliconflow.cn/v1
+      api_key: os.environ/VLLM_ASCEND_API_KEY       # = SiliconFlow API key
 
 litellm_settings:
-  success_callback: ["langfuse"]                # 原生 SDK → Langfuse ingestion API
+  success_callback: ["langfuse"]
   request_timeout: 600
 
 general_settings:
-  master_key: os.environ/LITELLM_MASTER_KEY     # agent 侧用它作为 OPENAI_API_KEY
+  master_key: os.environ/LITELLM_MASTER_KEY
