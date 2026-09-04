@@ -6,9 +6,14 @@
   distinct_tools          不同工具数
   redundant_call_ratio    冗余调用比例（同签名重复出现）
   tool_error_rate         observation 命中错误模式的比例（启发式，口径透明）
+  tool_errors_total       命中错误模式的调用绝对数
+  steps_total             agent step 总数
   loop_detected           死循环检测（连续>=3 次相同调用+相同结果） categorical
   task_duration_s         端到端时长（轨迹首末时间戳，真值）
   tool.<name>.interval_s  per-tool 平均 step 间隔（近似口径：含模型时间）
+  tool.<name>.calls       per-tool 调用次数
+
+幂等：挂载前查 trace 已有 score 名，同名跳过（管线重跑不产生重复）。
 
 用法：
   python3 analyzer.py --run-root <runs目录> [--dry-run]
@@ -98,9 +103,11 @@ def analyze_trial(trial) -> dict:
     t1 = _parse_ts(next((s.timestamp for s in reversed(steps) if s.timestamp), None))
     duration = (t1 - t0).total_seconds() if t0 and t1 else None
 
-    # per-tool 平均 step 间隔（近似：含模型时间）
+    # per-tool 平均 step 间隔（近似：含模型时间）与调用次数
     per_tool: dict[str, list[float]] = {}
+    per_tool_calls: dict[str, int] = {}
     for fn, _args, _obs, _i, ts, next_ts in calls:
+        per_tool_calls[fn] = per_tool_calls.get(fn, 0) + 1
         a, b = _parse_ts(ts), _parse_ts(next_ts)
         if a and b and (b - a).total_seconds() >= 0:
             per_tool.setdefault(fn, []).append((b - a).total_seconds())
@@ -110,16 +117,20 @@ def analyze_trial(trial) -> dict:
         "distinct_tools": distinct,
         "redundant_call_ratio": round(redundant_ratio, 4),
         "tool_error_rate": round(error_rate, 4),
+        "tool_errors_total": err,
+        "steps_total": len(steps),
         "loop_detected": "loop" if loop else "none",
         "task_duration_s": round(duration, 3) if duration is not None else None,
         "per_tool_interval": {
             fn: round(sum(v) / len(v), 3) for fn, v in per_tool.items()
         },
+        "per_tool_calls": per_tool_calls,
     }
 
 
 NUMERIC = ("tool_calls_total", "distinct_tools", "redundant_call_ratio",
-           "tool_error_rate", "task_duration_s")
+           "tool_error_rate", "tool_errors_total", "steps_total",
+           "task_duration_s")
 
 
 def build_scores(metrics: dict, trace_id: str | None) -> list[dict]:
@@ -140,6 +151,11 @@ def build_scores(metrics: dict, trace_id: str | None) -> list[dict]:
                       "name": f"tool.{fn}.interval_s",
                       "value": mean_s, "dataType": "NUMERIC",
                       "comment": "近似口径：step 间隔，含模型时间",
+                      "metadata": {"source": "scheme-a-analyzer"}})
+    for fn, n in metrics.get("per_tool_calls", {}).items():
+        items.append({"traceId": trace_id,
+                      "name": f"tool.{fn}.calls",
+                      "value": n, "dataType": "NUMERIC",
                       "metadata": {"source": "scheme-a-analyzer"}})
     return items
 
@@ -179,14 +195,22 @@ def main(argv=None) -> int:
                   file=sys.stderr)
             fail += 1
             continue
+        existing: set[str] = set()
+        try:
+            existing = {s["name"] for s in client.trace_scores(trace["id"])}
+        except Exception:  # noqa: BLE001
+            existing = set()
         for item in build_scores(metrics, trace["id"]):
+            if item["name"] in existing:
+                continue
             try:
                 client.post_score(item)
                 ok += 1
             except Exception as exc:  # noqa: BLE001
                 fail += 1
                 print(f"    [score:fail] {item['name']}: {exc}", file=sys.stderr)
-        print(f"    -> scores 挂载 trace {trace['id']}")
+        print(f"    -> scores 挂载 trace {trace['id']}"
+              f"（幂等跳过 {len(existing)} 个已有）")
 
     if args.dry_run:
         print("dry-run 完成（未联网）")

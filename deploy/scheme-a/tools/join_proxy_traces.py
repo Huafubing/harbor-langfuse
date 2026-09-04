@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 """Proxy trace 关联 + 三段拆解。
 
-把 LiteLLM proxy（OTel callback）产生的模型请求 trace，按时间窗归入对应
-trial 的 session，并计算三段拆解 scores：
+把 LiteLLM proxy（原生 langfuse callback）产生的模型请求 GENERATION，
+按时间窗归入对应 trial 的 session，并计算三段拆解 scores：
 
-  model_time_s      模型段真值（该窗口内 proxy trace 的 latency 总和）
+  model_time_s      模型段真值（该窗口内 GENERATION 的 latency（秒）总和）
   non_model_time_s  工具+overhead 合计（task_duration - model_time，残差口径）
   task_duration_s   端到端真值（轨迹首末时间戳，与 analyzer 同源）
 
 时间窗来源：result.json 的 started_at/finished_at（缺失时回退轨迹首末）。
 验证期单并发下为精确匹配；并发场景为时间分桶近似（报告需标注口径）。
+
+注：PATCH sessionId 只更新 v3 traces 表；v2 observations 的 sessionId
+过滤命中 events 表固化列，因此本脚本用时间窗找候选，而不是 sessionId。
 
 用法：
   python3 join_proxy_traces.py --run-root <runs目录> [--window 120]
@@ -84,77 +87,111 @@ def main(argv=None) -> int:
         from_ts = (t0 - timedelta(seconds=args.window)).isoformat()
         to_ts = (t1 + timedelta(seconds=args.window)).isoformat()
 
-        # 窗口内全部 trace；proxy trace = 不带 harbor tag 的
+        # 窗口内全部 GENERATION；proxy 的 = 不带 harbor tag 的
+        #（tags 为 trace 级，取自 trace_context 组）
         try:
-            candidates = client.list_traces(
-                fromTimestamp=from_ts, toTimestamp=to_ts)
+            candidates = client.list_generations(
+                from_ts=from_ts, to_ts=to_ts)
         except Exception as exc:  # noqa: BLE001
             print(f"  [{t.trial_dir.name}] 查询失败：{exc}", file=sys.stderr)
             continue
-        proxy = []
-        for tr in candidates:
-            tags = tr.get("tags") or []
-            if "harbor" in tags:
-                continue
-            ts = _parse_ts(tr.get("timestamp"))
-            if ts and t0 - timedelta(seconds=args.window) <= ts \
-                    <= t1 + timedelta(seconds=args.window):
-                proxy.append(tr)
+        proxy = [g for g in candidates
+                 if "harbor" not in (g.get("tags") or [])]
 
         # 定位 trial trace（挂三段 scores 的目标）
         trial_trace = client.find_trial_trace(t.session_id)
         trace_id = trial_trace["id"] if trial_trace else None
 
-        # PATCH proxy traces → 同 session + 标记 tag
+        # PATCH proxy traces → 同 session + 标记 tag（同 trace 去重）
         joined = 0
-        for tr in proxy:
-            new_tags = sorted(set((tr.get("tags") or []) + ["proxy", t.trial_dir.name]))
+        patched: set[str] = set()
+        for g in proxy:
+            tid = g["traceId"]
+            if not tid or tid in patched:
+                continue
+            new_tags = sorted(set((g.get("tags") or [])
+                                  + ["proxy", t.trial_dir.name]))
             try:
-                client.patch_trace(tr["id"], {"sessionId": t.session_id,
-                                              "tags": new_tags})
+                client.patch_trace(tid, {"sessionId": t.session_id,
+                                         "tags": new_tags})
+                patched.add(tid)
                 joined += 1
             except Exception as exc:  # noqa: BLE001
-                print(f"    [patch:fail] {tr['id']}: {exc}", file=sys.stderr)
+                print(f"    [patch:fail] {tid}: {exc}", file=sys.stderr)
 
-        # 三段拆解
-        model_ms = 0.0
-        for tr in proxy:
-            ms = tr.get("latencyMs")
-            if isinstance(ms, (int, float)):
-                model_ms += ms
-        task_s = None
-        if trial_trace and trial_trace.get("latencyMs") is not None:
-            task_s = trial_trace["latencyMs"] / 1000.0
-        else:
-            from analyzer import analyze_trial
-            m = analyze_trial(t)
-            task_s = m.get("task_duration_s")
+        # 三段拆解（GENERATION latency 单位为秒）
+        model_s = round(sum(g["latency"] for g in proxy
+                            if isinstance(g.get("latency"), (int, float))), 3)
+        from analyzer import analyze_trial
+        task_s = analyze_trial(t).get("task_duration_s")
 
-        model_s = round(model_ms / 1000.0, 3)
+        # LLM 请求聚合（proxy 口径，供时延面板使用）
+        lats = sorted(g["latency"] for g in proxy
+                      if isinstance(g.get("latency"), (int, float)))
+        ttfts = [g["timeToFirstToken"] for g in proxy
+                 if isinstance(g.get("timeToFirstToken"), (int, float))]
+        tin = sum(g["inputTokens"] for g in proxy
+                  if isinstance(g.get("inputTokens"), (int, float)))
+        tout = sum(g["outputTokens"] for g in proxy
+                   if isinstance(g.get("outputTokens"), (int, float)))
+        p95 = lats[min(len(lats) - 1, round(0.95 * (len(lats) - 1)))] if lats else 0.0
+        agg = {
+            "llm_requests": float(len(lats)),
+            "llm_tokens_input": float(tin),
+            "llm_tokens_output": float(tout),
+            "llm_tokens_total": float(tin + tout),
+            "llm_latency_avg_s": round(sum(lats) / len(lats), 3) if lats else 0.0,
+            "llm_latency_p95_s": round(p95, 3),
+            "llm_ttft_avg_s": (round(sum(ttfts) / len(ttfts), 3)
+                               if ttfts else None),
+            "llm_tput_tokens_per_s": (round(tout / sum(lats), 3)
+                                      if lats and sum(lats) > 0 else None),
+        }
+
         scores = []
         if trace_id and task_s is not None:
             non_model = round(max(task_s - model_s, 0.0), 3)
             scores = [
                 {"traceId": trace_id, "name": "model_time_s", "value": model_s,
                  "dataType": "NUMERIC",
-                 "comment": "proxy 真值：窗口内模型请求 latency 总和",
+                 "comment": "proxy 真值：窗口内 GENERATION latency（秒）总和",
                  "metadata": {"source": "scheme-a-join",
-                              "proxy_traces": len(proxy)}},
+                              "proxy_generations": len(proxy)}},
                 {"traceId": trace_id, "name": "non_model_time_s",
                  "value": non_model, "dataType": "NUMERIC",
                  "comment": "残差口径：task_duration - model_time（工具+overhead 合计）",
                  "metadata": {"source": "scheme-a-join"}},
             ]
-            for s in scores:
-                try:
-                    client.post_score(s)
-                    total_scores += 1
-                except Exception as exc:  # noqa: BLE001
-                    print(f"    [score:fail] {s['name']}: {exc}", file=sys.stderr)
+        for name, v in agg.items():
+            if v is None or not trace_id:
+                continue
+            scores.append({
+                "traceId": trace_id, "name": name, "value": v,
+                "dataType": "NUMERIC",
+                "comment": "proxy 聚合真值（窗口内 GENERATION 统计）"
+                           + ("；注意：proxy TTFT 口径受限（≈latency）"
+                              if name == "llm_ttft_avg_s" else ""),
+                "metadata": {"source": "scheme-a-join"}})
+
+        # 幂等：trace 上已存在的同名 score 跳过（管线重跑不产生重复）
+        existing: set[str] = set()
+        if trace_id:
+            try:
+                existing = {s["name"] for s in client.trace_scores(trace_id)}
+            except Exception:  # noqa: BLE001
+                existing = set()
+        for s in scores:
+            if s["name"] in existing:
+                continue
+            try:
+                client.post_score(s)
+                total_scores += 1
+            except Exception as exc:  # noqa: BLE001
+                print(f"    [score:fail] {s['name']}: {exc}", file=sys.stderr)
 
         total_joined += joined
-        print(f"  [{t.trial_dir.name}] proxy traces joined={joined} "
-              f"model_time={model_s}s task={task_s}s "
+        print(f"  [{t.trial_dir.name}] generations={len(proxy)} "
+              f"traces joined={joined} model_time={model_s}s task={task_s}s "
               f"trace={'found' if trace_id else 'MISSING(run export first)'}")
 
     print(f"完成：joined={total_joined} 段拆解 scores={total_scores}")

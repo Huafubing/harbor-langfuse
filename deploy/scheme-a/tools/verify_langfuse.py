@@ -7,8 +7,9 @@
   [3] ② 轨迹质量 scores（tool_calls_total / redundant_call_ratio /
       tool_error_rate / loop_detected）
   [4] ③ task_duration_s + model_time_s + non_model_time_s
-  [5] ④ proxy traces 已 join（sessionId 下非 harbor trace >=1）且
-      gen_ai.server.time_to_first_token / time_per_output_token 可见
+  [5] ④ proxy traces 已 join（session 下非 trial trace >=1），
+      原生 timeToFirstToken 可见，TPOT 可按 (latency - ttft)/max(output-1,1)
+      计算（ttft 缺失时退化为 latency/max(output-1,1)，即非流式口径）
   [6] ⑤ per-tool interval scores（近似口径）
 
 用法：
@@ -29,22 +30,6 @@ from lf_client import LangfuseClient  # noqa: E402
 REQUIRED_QUALITY = ("tool_calls_total", "redundant_call_ratio",
                     "tool_error_rate", "loop_detected")
 REQUIRED_PHASES = ("task_duration_s", "model_time_s", "non_model_time_s")
-TTFT_KEY = "gen_ai.server.time_to_first_token"
-TPOT_KEY = "gen_ai.server.time_per_output_token"
-
-
-def _iter_gen_ai_values(obs: dict):
-    """在 observation metadata（含嵌套 attributes）里找 gen_ai.server.* 值。"""
-    md = obs.get("metadata")
-    stacks = []
-    if isinstance(md, dict):
-        stacks.append(md)
-        if isinstance(md.get("attributes"), dict):
-            stacks.append(md["attributes"])
-    for stack in stacks:
-        for key, val in stack.items():
-            if key in (TTFT_KEY, TPOT_KEY):
-                yield key, val
 
 
 def main(argv=None) -> int:
@@ -91,37 +76,36 @@ def main(argv=None) -> int:
                        f"/model={scores.get('model_time_s', {}).get('value')}"
                        f"/non_model={scores.get('non_model_time_s', {}).get('value')}"))
 
-        # ④ proxy join + TTFT/TPOT
-        session_traces = [tr for tr in client.list_traces(sessionId=t.session_id)
-                          if "harbor" not in (tr.get("tags") or [])]
+        # ④ proxy join + TTFT/TPOT（原生 langfuse callback 字段）
+        # v2 observations 的 sessionId 过滤命中 events 表固化列（ingest 时
+        # 写入），看不到 join 的 PATCH；v1 GET /traces 读 v3 traces 表，
+        # PATCH 结果立即可见。
+        session_traces = [tr for tr in client.list_traces_v1(t.session_id)
+                          if tr.get("id") != trace["id"]]
         checks.append(("④ proxy traces joined", len(session_traces) >= 1,
                        f"{len(session_traces)} 条" if session_traces
                        else "无（跑 join_proxy_traces.py）"))
 
-        ttft_seen = tpot_seen = False
         ttft_vals: list[float] = []
+        tpot_vals: list[float] = []
         for tr in session_traces:
-            try:
-                obs_list = client.get("/observations",
-                                      params={"traceId": tr["id"],
-                                              "limit": 50}).get("data") or []
-            except Exception:  # noqa: BLE001
-                obs_list = []
-            for obs in obs_list:
-                for key, val in _iter_gen_ai_values(obs):
-                    if key == TTFT_KEY:
-                        ttft_seen = True
-                        try:
-                            ttft_vals.append(float(val))
-                        except (TypeError, ValueError):
-                            pass
-                    if key == TPOT_KEY:
-                        tpot_seen = True
-        checks.append(("④ TTFT 属性可见", ttft_seen,
-                       f"值={ttft_vals}" if ttft_seen
-                       else "未见（非流式请求 TTFT=0，或属性在 metadata 他处）"))
-        checks.append(("④ TPOT 属性可见", tpot_seen,
-                       "ok" if tpot_seen else "未见"))
+            for g in client.list_generations(trace_id=tr["id"]):
+                ttft = g.get("timeToFirstToken")
+                lat = g.get("latency")
+                out = g.get("outputTokens")
+                if isinstance(ttft, (int, float)):
+                    ttft_vals.append(round(ttft, 3))
+                if isinstance(lat, (int, float)) \
+                        and isinstance(out, (int, float)) and out >= 1:
+                    base = ttft if isinstance(ttft, (int, float)) else 0.0
+                    tpot_vals.append(round(
+                        (lat - base) / max(out - 1, 1), 4))
+        checks.append(("④ TTFT 可见（原生 timeToFirstToken）", bool(ttft_vals),
+                       f"值={ttft_vals}" if ttft_vals
+                       else "未见（非流式请求该值为 null）"))
+        checks.append(("④ TPOT 可计算", bool(tpot_vals),
+                       f"值={tpot_vals}" if tpot_vals
+                       else "无法计算（缺 latency/usage，或 join 未跑）"))
 
         # ⑤ per-tool
         tool_scores = [n for n in scores if n.startswith("tool.") and

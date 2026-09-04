@@ -1,17 +1,18 @@
-# LiteLLM Proxy 配置：内网 vllm-ascend → Langfuse（OTel callback）
+# LiteLLM Proxy 配置：内网 vllm-ascend → Langfuse（原生 langfuse callback）
 # 关键点：
-# - callbacks: ["otel"] 走 OTLP 上报，携带 gen_ai.server.time_to_first_token /
-#   gen_ai.server.time_per_output_token（TTFT/TPOT 仅 streaming 请求上报非零值）
+# - success_callback: ["langfuse"] 走 Langfuse ingestion API；litellm 在流式期间
+#   统计 completion_start_time，Langfuse 据此计算原生 timeToFirstToken（TTFT 可见，
+#   TPOT 由验证脚本按 v2 observation 时间戳计算）
 # - model_name 是 agent 侧请求的别名；model 的 openai/ 前缀 + api_base 指向 vllm-ascend
 model_list:
-  - model_name: ascend-qwen                     # agent 请求用的别名（可改）
+  - model_name: qwen3                           # agent 请求用的别名（可改）
     litellm_params:
-      model: openai/Qwen2.5-72B-Instruct        # vllm serve 的实际模型名（按需修改）
+      model: openai/qwen3                       # vllm serve 的实际模型名（按需修改）
       api_base: os.environ/VLLM_ASCEND_BASE_URL
       api_key: os.environ/VLLM_ASCEND_API_KEY
 
 litellm_settings:
-  callbacks: ["otel"]                           # OTel → Langfuse OTLP 端点
+  success_callback: ["langfuse"]                # 原生 SDK → Langfuse ingestion API
   request_timeout: 600
 
 general_settings:
