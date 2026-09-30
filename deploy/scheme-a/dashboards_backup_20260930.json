@@ -1,0 +1,984 @@
+{
+  "exported_at": "2026-09-30T10:00:22.570336",
+  "source": "http://localhost:3000 (harbor-trial)",
+  "dashboards": [
+    {
+      "id": "cmtmpdy32014old07sbej4ohf",
+      "name": "Harbor · 评测结果",
+      "description": "reward 总体概览 + 按 Trial 拆解（scheme-a）",
+      "widgets": [
+        {
+          "id": "cmtmpdy3a014rld07iqwpt0p6",
+          "createdAt": "2026-09-04T08:39:54.838Z",
+          "updatedAt": "2026-09-04T08:39:54.838Z",
+          "name": "Trial 总数",
+          "description": "reward score 条数 = 已导出 Trial 数",
+          "view": "scores-numeric",
+          "dimensions": [],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "count"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "reward",
+              "type": "string"
+            }
+          ],
+          "chartType": "NUMBER",
+          "chartConfig": {
+            "type": "NUMBER"
+          },
+          "_placement": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdy3u014vld07rwowf3bf",
+          "createdAt": "2026-09-04T08:39:54.859Z",
+          "updatedAt": "2026-09-04T08:39:54.859Z",
+          "name": "平均 reward",
+          "description": "全部 Trial reward 均值（二值 reward 下即通过率）",
+          "view": "scores-numeric",
+          "dimensions": [],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "reward",
+              "type": "string"
+            }
+          ],
+          "chartType": "NUMBER",
+          "chartConfig": {
+            "type": "NUMBER"
+          },
+          "_placement": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdy4d014zld077ral8ads",
+          "createdAt": "2026-09-04T08:39:54.877Z",
+          "updatedAt": "2026-09-04T08:39:54.877Z",
+          "name": "reward 中位数",
+          "description": "",
+          "view": "scores-numeric",
+          "dimensions": [],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "p50"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "reward",
+              "type": "string"
+            }
+          ],
+          "chartType": "NUMBER",
+          "chartConfig": {
+            "type": "NUMBER"
+          },
+          "_placement": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdy4v0153ld07fvbi7u5a",
+          "createdAt": "2026-09-04T08:39:54.895Z",
+          "updatedAt": "2026-09-04T08:39:54.895Z",
+          "name": "最差 reward",
+          "description": "最差 Trial 得分，暴露短板 case",
+          "view": "scores-numeric",
+          "dimensions": [],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "min"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "reward",
+              "type": "string"
+            }
+          ],
+          "chartType": "NUMBER",
+          "chartConfig": {
+            "type": "NUMBER"
+          },
+          "_placement": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdy5e0157ld075xhah5ih",
+          "createdAt": "2026-09-04T08:39:54.914Z",
+          "updatedAt": "2026-09-04T08:39:54.914Z",
+          "name": "reward 分布",
+          "description": "全体 Trial reward 直方图",
+          "view": "scores-numeric",
+          "dimensions": [],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "histogram"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "reward",
+              "type": "string"
+            }
+          ],
+          "chartType": "HISTOGRAM",
+          "chartConfig": {
+            "type": "HISTOGRAM",
+            "bins": 10
+          },
+          "_placement": {
+            "x": 0,
+            "y": 3,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "id": "cmtmpdy5y015bld07d952jxs6",
+          "createdAt": "2026-09-04T08:39:54.934Z",
+          "updatedAt": "2026-09-04T08:39:54.934Z",
+          "name": "通过构成（reward=0/1）",
+          "description": "通过 vs 未通过 Trial 占比",
+          "view": "scores-numeric",
+          "dimensions": [
+            {
+              "field": "value"
+            }
+          ],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "count"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "reward",
+              "type": "string"
+            }
+          ],
+          "chartType": "PIE",
+          "chartConfig": {
+            "type": "PIE"
+          },
+          "_placement": {
+            "x": 6,
+            "y": 3,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "id": "cmtmpdy6h015fld074xc5szlf",
+          "createdAt": "2026-09-04T08:39:54.954Z",
+          "updatedAt": "2026-09-04T08:39:54.954Z",
+          "name": "各 Trial reward",
+          "description": "按 Trial 拆解（traceId 对照 export 输出）",
+          "view": "scores-numeric",
+          "dimensions": [
+            {
+              "field": "traceId"
+            }
+          ],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "reward",
+              "type": "string"
+            }
+          ],
+          "chartType": "VERTICAL_BAR",
+          "chartConfig": {
+            "type": "VERTICAL_BAR"
+          },
+          "_placement": {
+            "x": 0,
+            "y": 8,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "id": "cmtmpdy70015jld07ndf3z41q",
+          "createdAt": "2026-09-04T08:39:54.972Z",
+          "updatedAt": "2026-09-04T08:39:54.972Z",
+          "name": "Trial 明细透视",
+          "description": "每 Trial 的 reward avg/min/max",
+          "view": "scores-numeric",
+          "dimensions": [
+            {
+              "field": "traceId"
+            }
+          ],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            },
+            {
+              "measure": "value",
+              "agg": "min"
+            },
+            {
+              "measure": "value",
+              "agg": "max"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "reward",
+              "type": "string"
+            }
+          ],
+          "chartType": "PIVOT_TABLE",
+          "chartConfig": {
+            "type": "PIVOT_TABLE"
+          },
+          "_placement": {
+            "x": 6,
+            "y": 8,
+            "width": 6,
+            "height": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "cmtmpdy7s015old07fr3sl4aa",
+      "name": "Harbor · 轨迹质量",
+      "description": "轨迹质量三层视图：卡片/分布/明细，指标不重复（scheme-a）",
+      "widgets": [
+        {
+          "id": "cmtmpdy7z015rld07muykp7ze",
+          "createdAt": "2026-09-04T08:39:55.007Z",
+          "updatedAt": "2026-09-04T08:39:55.007Z",
+          "name": "平均工具调用数",
+          "description": "轨迹客观统计（ATIF）",
+          "view": "scores-numeric",
+          "dimensions": [],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "tool_calls_total",
+              "type": "string"
+            }
+          ],
+          "chartType": "NUMBER",
+          "chartConfig": {
+            "type": "NUMBER"
+          },
+          "_placement": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdy8h015vld07rje85l6k",
+          "createdAt": "2026-09-04T08:39:55.025Z",
+          "updatedAt": "2026-09-04T08:39:55.025Z",
+          "name": "平均工具错误率",
+          "description": "observation 命中错误模式的启发式比例",
+          "view": "scores-numeric",
+          "dimensions": [],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "tool_error_rate",
+              "type": "string"
+            }
+          ],
+          "chartType": "NUMBER",
+          "chartConfig": {
+            "type": "NUMBER"
+          },
+          "_placement": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdy8z015zld07sdq8tu87",
+          "createdAt": "2026-09-04T08:39:55.043Z",
+          "updatedAt": "2026-09-04T08:39:55.043Z",
+          "name": "平均冗余调用率",
+          "description": "同签名重复调用占比",
+          "view": "scores-numeric",
+          "dimensions": [],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "redundant_call_ratio",
+              "type": "string"
+            }
+          ],
+          "chartType": "NUMBER",
+          "chartConfig": {
+            "type": "NUMBER"
+          },
+          "_placement": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdy9h0163ld0718pauodq",
+          "createdAt": "2026-09-04T08:39:55.061Z",
+          "updatedAt": "2026-09-04T08:39:55.061Z",
+          "name": "平均步骤数",
+          "description": "agent step 总数（含无工具调用步骤）",
+          "view": "scores-numeric",
+          "dimensions": [],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "steps_total",
+              "type": "string"
+            }
+          ],
+          "chartType": "NUMBER",
+          "chartConfig": {
+            "type": "NUMBER"
+          },
+          "_placement": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdy9z0167ld07wmtini74",
+          "createdAt": "2026-09-04T08:39:55.080Z",
+          "updatedAt": "2026-09-04T08:39:55.080Z",
+          "name": "各 Trial 工具错误率",
+          "description": "定位错误率高的 case",
+          "view": "scores-numeric",
+          "dimensions": [
+            {
+              "field": "traceId"
+            }
+          ],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "tool_error_rate",
+              "type": "string"
+            }
+          ],
+          "chartType": "HORIZONTAL_BAR",
+          "chartConfig": {
+            "type": "HORIZONTAL_BAR"
+          },
+          "_placement": {
+            "x": 6,
+            "y": 6,
+            "width": 6,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdyai016bld07emna6wac",
+          "createdAt": "2026-09-04T08:39:55.098Z",
+          "updatedAt": "2026-09-04T08:39:55.098Z",
+          "name": "各 Trial 工具调用数",
+          "description": "定位调用量大的 case",
+          "view": "scores-numeric",
+          "dimensions": [
+            {
+              "field": "traceId"
+            }
+          ],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "tool_calls_total",
+              "type": "string"
+            }
+          ],
+          "chartType": "VERTICAL_BAR",
+          "chartConfig": {
+            "type": "VERTICAL_BAR"
+          },
+          "_placement": {
+            "x": 6,
+            "y": 3,
+            "width": 6,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdybe016fld07os17u2v7",
+          "createdAt": "2026-09-04T08:39:55.131Z",
+          "updatedAt": "2026-09-04T08:39:55.131Z",
+          "name": "各 Trial × 质量指标",
+          "description": "行=Trial，列=指标（唯一明细视图，含错误/步骤绝对数）",
+          "view": "scores-numeric",
+          "dimensions": [
+            {
+              "field": "traceId"
+            },
+            {
+              "field": "name"
+            }
+          ],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "any of",
+              "value": [
+                "tool_calls_total",
+                "tool_errors_total",
+                "steps_total",
+                "tool_error_rate",
+                "redundant_call_ratio"
+              ],
+              "type": "stringOptions"
+            }
+          ],
+          "chartType": "PIVOT_TABLE",
+          "chartConfig": {
+            "type": "PIVOT_TABLE"
+          },
+          "_placement": {
+            "x": 0,
+            "y": 3,
+            "width": 6,
+            "height": 6
+          }
+        }
+      ]
+    },
+    {
+      "id": "cmtmpdyc9016kld074psmpq8l",
+      "name": "Harbor · 时延性能",
+      "description": "时间构成 / LLM 时延与请求数 / Token / per-tool（scheme-a）",
+      "widgets": [
+        {
+          "id": "cmtmpdycg016nld07aznbpme2",
+          "createdAt": "2026-09-04T08:39:55.169Z",
+          "updatedAt": "2026-09-04T08:39:55.169Z",
+          "name": "平均任务时长",
+          "description": "轨迹首末时间戳（真值）",
+          "view": "scores-numeric",
+          "dimensions": [],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "task_duration_s",
+              "type": "string"
+            }
+          ],
+          "chartType": "NUMBER",
+          "chartConfig": {
+            "type": "NUMBER"
+          },
+          "_placement": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdycy016rld07uimd7951",
+          "createdAt": "2026-09-04T08:39:55.186Z",
+          "updatedAt": "2026-09-04T08:39:55.186Z",
+          "name": "平均模型段",
+          "description": "proxy GENERATION latency 总和（真值·经 proxy 口径）",
+          "view": "scores-numeric",
+          "dimensions": [],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "model_time_s",
+              "type": "string"
+            }
+          ],
+          "chartType": "NUMBER",
+          "chartConfig": {
+            "type": "NUMBER"
+          },
+          "_placement": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdydf016vld07mcv148s6",
+          "createdAt": "2026-09-04T08:39:55.203Z",
+          "updatedAt": "2026-09-04T08:39:55.203Z",
+          "name": "平均非模型段",
+          "description": "残差：任务时长 − 模型段（工具+overhead）",
+          "view": "scores-numeric",
+          "dimensions": [],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "non_model_time_s",
+              "type": "string"
+            }
+          ],
+          "chartType": "NUMBER",
+          "chartConfig": {
+            "type": "NUMBER"
+          },
+          "_placement": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdydv016zld07uji8die9",
+          "createdAt": "2026-09-04T08:39:55.220Z",
+          "updatedAt": "2026-09-04T08:39:55.220Z",
+          "name": "平均 LLM 请求时延",
+          "description": "单次模型请求 latency 均值（秒）",
+          "view": "scores-numeric",
+          "dimensions": [],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "llm_latency_avg_s",
+              "type": "string"
+            }
+          ],
+          "chartType": "NUMBER",
+          "chartConfig": {
+            "type": "NUMBER"
+          },
+          "_placement": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdyem0173ld07j41wo9iq",
+          "createdAt": "2026-09-04T08:39:55.246Z",
+          "updatedAt": "2026-09-04T08:39:55.246Z",
+          "name": "时间构成（模型段 vs 非模型段）",
+          "description": "模型段与非模型段占总时长比例（sum 聚合；task_duration = model + non_model）",
+          "view": "scores-numeric",
+          "dimensions": [
+            {
+              "field": "name"
+            }
+          ],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "sum"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "any of",
+              "value": [
+                "model_time_s",
+                "non_model_time_s"
+              ],
+              "type": "stringOptions"
+            }
+          ],
+          "chartType": "PIE",
+          "chartConfig": {
+            "type": "PIE"
+          },
+          "_placement": {
+            "x": 3,
+            "y": 3,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdyf40177ld07zs4ch85o",
+          "createdAt": "2026-09-04T08:39:55.264Z",
+          "updatedAt": "2026-09-04T08:39:55.264Z",
+          "name": "各 Trial × 三段",
+          "description": "行=Trial，列=task/model/non_model",
+          "view": "scores-numeric",
+          "dimensions": [
+            {
+              "field": "traceId"
+            },
+            {
+              "field": "name"
+            }
+          ],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "any of",
+              "value": [
+                "task_duration_s",
+                "model_time_s",
+                "non_model_time_s"
+              ],
+              "type": "stringOptions"
+            }
+          ],
+          "chartType": "PIVOT_TABLE",
+          "chartConfig": {
+            "type": "PIVOT_TABLE"
+          },
+          "_placement": {
+            "x": 6,
+            "y": 3,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "id": "cmtmpdyfl017bld07lpf3hrqb",
+          "createdAt": "2026-09-04T08:39:55.281Z",
+          "updatedAt": "2026-09-04T08:39:55.281Z",
+          "name": "LLM 时延 avg/p95、TTFT 与 TPOT",
+          "description": "按 Trial 聚合的请求时延均值/p95；TTFT/TPOT 为流式真值（经 proxy 口径；TTFT 缺失时 TPOT 退化为时长/token 均值）",
+          "view": "scores-numeric",
+          "dimensions": [
+            {
+              "field": "name"
+            }
+          ],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "any of",
+              "value": [
+                "llm_latency_avg_s",
+                "llm_latency_p95_s",
+                "llm_ttft_avg_s",
+                "llm_tpot_avg_s"
+              ],
+              "type": "stringOptions"
+            }
+          ],
+          "chartType": "HORIZONTAL_BAR",
+          "chartConfig": {
+            "type": "HORIZONTAL_BAR"
+          },
+          "_placement": {
+            "x": 6,
+            "y": 9,
+            "width": 6,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdyg3017fld07pth88t4b",
+          "createdAt": "2026-09-04T08:39:55.299Z",
+          "updatedAt": "2026-09-04T08:39:55.299Z",
+          "name": "各 Trial 生成吞吐",
+          "description": "输出 token / 模型段秒数（tokens/s）",
+          "view": "scores-numeric",
+          "dimensions": [
+            {
+              "field": "traceId"
+            }
+          ],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "llm_tput_tokens_per_s",
+              "type": "string"
+            }
+          ],
+          "chartType": "VERTICAL_BAR",
+          "chartConfig": {
+            "type": "VERTICAL_BAR"
+          },
+          "_placement": {
+            "x": 0,
+            "y": 9,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "id": "cmtmpdygl017jld0742uuj2q9",
+          "createdAt": "2026-09-04T08:39:55.317Z",
+          "updatedAt": "2026-09-04T08:39:55.317Z",
+          "name": "Token 用量（Trial 均值）",
+          "description": "输入/输出/合计 token，per-Trial 聚合后再取均值",
+          "view": "scores-numeric",
+          "dimensions": [
+            {
+              "field": "name"
+            }
+          ],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "any of",
+              "value": [
+                "llm_tokens_input",
+                "llm_tokens_output",
+                "llm_tokens_total"
+              ],
+              "type": "stringOptions"
+            }
+          ],
+          "chartType": "HORIZONTAL_BAR",
+          "chartConfig": {
+            "type": "HORIZONTAL_BAR"
+          },
+          "_placement": {
+            "x": 0,
+            "y": 6,
+            "width": 6,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdyh3017nld075bse18fg",
+          "createdAt": "2026-09-04T08:39:55.335Z",
+          "updatedAt": "2026-09-04T08:39:55.335Z",
+          "name": "per-tool 时延 avg/p95",
+          "description": "含该工具 step 的平均间隔（近似，含模型时间）",
+          "view": "scores-numeric",
+          "dimensions": [
+            {
+              "field": "name"
+            }
+          ],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            },
+            {
+              "measure": "value",
+              "agg": "p95"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "contains",
+              "value": "interval_s",
+              "type": "string"
+            }
+          ],
+          "chartType": "HORIZONTAL_BAR",
+          "chartConfig": {
+            "type": "HORIZONTAL_BAR"
+          },
+          "_placement": {
+            "x": 6,
+            "y": 12,
+            "width": 6,
+            "height": 3
+          }
+        },
+        {
+          "id": "cmtmpdyhl017rld07dba9hxn0",
+          "createdAt": "2026-09-04T08:39:55.353Z",
+          "updatedAt": "2026-09-04T08:39:55.353Z",
+          "name": "各 Trial LLM 请求数",
+          "description": "窗口内 proxy GENERATION 请求数（请求量对比）",
+          "view": "scores-numeric",
+          "dimensions": [
+            {
+              "field": "traceId"
+            }
+          ],
+          "metrics": [
+            {
+              "measure": "value",
+              "agg": "avg"
+            }
+          ],
+          "filters": [
+            {
+              "column": "name",
+              "operator": "=",
+              "value": "llm_requests",
+              "type": "string"
+            }
+          ],
+          "chartType": "VERTICAL_BAR",
+          "chartConfig": {
+            "type": "VERTICAL_BAR"
+          },
+          "_placement": {
+            "x": 0,
+            "y": 3,
+            "width": 3,
+            "height": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "cmtmpudc40183ld07z3epsj0q",
+      "name": "__exp_ttft__",
+      "description": "x",
+      "widgets": []
+    }
+  ]
+}
