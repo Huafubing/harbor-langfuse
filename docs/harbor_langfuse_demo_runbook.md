@@ -219,9 +219,69 @@ curl -s -u "$LF_PK:$LF_SK" -G "http://localhost:3000/api/public/traces" \
 
 ---
 
-## 8. Step 6 查看 Dashboard（先完成 §2 端口转发）
+## 8. Step 6 查看 Dashboard 与指标讲解（先完成 §2 端口转发）
 
-浏览器打开 http://localhost:3000 → 项目 `harbor-trial` → Dashboard，experiment 过滤勾选后应看到 3 个新 trial 的时延/吞吐/工具指标。
+浏览器打开 http://localhost:3000 → 项目 `harbor-trial` → Dashboards → **Harbor · 时延性能**；右上角时间范围选 Past 1 day，experiment 过滤勾选后应看到本轮 3 个 trial。
+除 Dashboard 外，**Tracing → 点开任一 `<task>#1` trace → 详情页 Scores 列表**可看该 trial 的全部 22 个 score（Observability → Scores 页则可按 name 横向对比）。
+
+### 8.1 Dashboard 布局与讲解动线
+
+| 部件 | 内容 | 讲解要点 |
+|---|---|---|
+| ① 总体卡片 ×4 | 任务时长 / 模型段 / 非模型段 / LLM 请求时延（均值） | 30 秒建立整体画像：跑了多久、时间花在哪、单次请求多快 |
+| ② 时间构成 饼图 | 模型段 vs 非模型段 占比（sum 聚合） | 回答"时间花在哪"：模型思考 vs 工具执行 + 框架开销 |
+| ③ 各 Trial×三段 透视表 | 行=Trial，列=task/model/non_model | 下钻单 trial 对比，哪个 trial 模型占比异常一目了然 |
+| ④ LLM 时延面板 | avg / p95 / TTFT / TPOT 横条 | 请求级性能与流式体验；p95 远超 avg 说明存在长尾慢请求 |
+| ⑤ 生成吞吐 / Token | 各 Trial tput 柱图；tokens in/out/合计 | 解码吞吐与上下文规模（成本侧视角） |
+| ⑥ 请求量 / 工具 | 各 Trial LLM 请求数；per-tool 时延 | 调用频次（干了多少活）与工具耗时分布 |
+
+建议讲解动线：**① 整体画像 → ②③ 时间构成（时间花哪了）→ ④⑤ LLM 性能（快不快、稳不稳）→ ⑥ 行为频次（忙不忙、有没有打转）**。
+
+### 8.2 指标清单（每 trial 22 个 score，按关注维度分组）
+
+**A. 结果质量**（export 写入，来自 harbor 评测）
+
+| 指标 | 口径 | 关注点 |
+|---|---|---|
+| `reward` | 评测得分 | 最终"做没做对"；务必与耗时分开设问，防止"又快又错" |
+| `reward.*` / `phenotype` | trial 带 reward_details / phenotypes 时 export 额外写入 | 细分项得分与标签（本 demo 3 题均只有总 reward） |
+
+**B. 任务时间构成**（回填脚本）
+
+| 指标 | 口径 | 关注点 |
+|---|---|---|
+| `task_duration_s` | 首末 agent step 时间差（墙钟） | 任务总耗时 |
+| `model_time_s` | 时间窗内全部 litellm GENERATION 延迟之和（proxy 真值） | 花在模型上的时间 |
+| `non_model_time_s` | task − model | 工具执行 + agent 框架开销；占比高 → 瓶颈在环境/工具侧而非模型 |
+
+**C. LLM 性能**（litellm GENERATION 聚合，proxy 真值）
+
+| 指标 | 口径 | 关注点 |
+|---|---|---|
+| `llm_requests` | GENERATION 条数 | 调用频次；与 steps_total 对比看单步是否多发请求 |
+| `llm_latency_avg_s` / `llm_latency_p95_s` | 单请求延迟均值 / p95 | 平均水平与长尾；本 demo 约 2.4~6.4s |
+| `llm_ttft_avg_s` | 流式首 token 时延（原生 completion_start_time 真值） | 排队 + 预填充耗时，决定"响应快不快" |
+| `llm_tpot_avg_s` | 流式解码阶段均摊每 token 时长 | 生成（decode）速度；TTFT 缺失时退化为时长/token 均值；本 demo 0.010~0.023s/token |
+| `llm_tput_tokens_per_s` | output tokens / model_time | 端到端吞吐 |
+| `llm_tokens_input` / `output` / `total` | proxy usage token 数 | 上下文规模与成本；input 大 → 长 prompt/多轮累积 |
+
+**D. Agent 行为**（回填脚本统计 trajectory.json）
+
+| 指标 | 口径 | 关注点 |
+|---|---|---|
+| `steps_total` | agent 步数 | 任务复杂度 / 是否啰嗦 |
+| `tool_calls_total` / `tool.bash.calls` | 工具调用总数 / 其中 bash | 干了多少活、bash 占比 |
+| `tool_errors_total` / `tool_error_rate` | observation 中 returncode≠0 的次数 / 占比 | 工具失败率；偏高 → 环境难或 agent 在乱试 |
+| `distinct_tools` | 去重工具数 | 行为面宽度 |
+| `tool.bash.interval_s` | 相邻两次 bash 平均间隔 | 观察/思考节奏 |
+| `redundant_call_ratio` | 重复出现的相同命令数 / 总调用数 | 是否在原地打转 |
+| `loop_detected` | 存在 ≥3 次重复同一命令 → "1"（CATEGORICAL） | 最直白的打转信号，可当过滤器快速定位问题 trial |
+
+### 8.3 数据从哪来（两条链路、三层含义）
+
+- **trajectory.json → export**：上传 trace/span + reward（A 组）；回填脚本统计行为类 score（B 组 task_duration、D 组）；
+- **litellm proxy 实时上报**：GENERATION 挂在 litellm 自建 trace 上（异步入库）→ 回填脚本按 trial 时间窗聚合出 model_time 与 C 组真值；
+- 因此 **A 组 = 评测结论、B/C 组 = proxy 观测真值、D 组 = trajectory 复盘统计**，三层互相印证：reward 回答"对不对"，时间/LLM 指标回答"贵不贵、快不快"，行为指标回答"过程健不健康"。
 
 ---
 
